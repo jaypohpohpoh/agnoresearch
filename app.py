@@ -1,7 +1,14 @@
-"""Streamlit UI for SME Research Agent."""
+"""Streamlit UI for SME Research Agent with real-time activity visibility."""
 
+import asyncio
 import streamlit as st
 from pathlib import Path
+
+from dotenv import load_dotenv
+from agno.agent import RunEvent
+
+# Load environment variables
+load_dotenv()
 
 st.set_page_config(page_title="SME Research Agent", page_icon="🔍", layout="wide")
 
@@ -34,6 +41,12 @@ def get_knowledge_and_agent():
 
 
 knowledge, agent = get_knowledge_and_agent()
+
+# Initialize session state for activities
+if "activities" not in st.session_state:
+    st.session_state.activities = []
+if "research_complete" not in st.session_state:
+    st.session_state.research_complete = False
 
 # Sidebar: Knowledge Base Management
 with st.sidebar:
@@ -69,6 +82,81 @@ with st.sidebar:
     else:
         st.info("No documents uploaded yet")
 
+
+def render_activities(container, activities: list):
+    """Render activity list in the given container."""
+    with container:
+        if not activities:
+            st.info("Waiting for agent to start...")
+            return
+
+        for act in activities:
+            status_icon = act.get("status_icon", "⏳")
+            tool_name = act.get("tool", "Unknown")
+
+            # Format tool arguments for display
+            args = act.get("args", {})
+            if isinstance(args, dict):
+                # Show URL if present, otherwise first arg
+                if "url" in args:
+                    args_display = args["url"]
+                elif "query" in args:
+                    args_display = f'"{args["query"]}"'
+                elif "company_name" in args:
+                    args_display = args["company_name"]
+                else:
+                    args_display = str(args)[:50]
+            else:
+                args_display = str(args)[:50]
+
+            # Truncate long displays
+            if len(args_display) > 60:
+                args_display = args_display[:57] + "..."
+
+            st.markdown(f"{status_icon} **{tool_name}** - `{args_display}`")
+
+            # Show result preview if completed
+            if act.get("result_preview"):
+                with st.expander("View result", expanded=False):
+                    st.text(act["result_preview"])
+
+
+async def run_research_with_streaming(agent, prompt: str):
+    """Run agent with real-time activity updates."""
+    activities = []
+    final_response = None
+
+    # Create placeholders
+    activity_container = st.empty()
+
+    async for event in agent.arun(prompt, stream=True, stream_events=True):
+        if event.event == RunEvent.tool_call_started:
+            activities.append({
+                "tool": event.tool.tool_name,
+                "args": event.tool.tool_args,
+                "status_icon": "⏳",
+                "result_preview": None,
+            })
+            render_activities(activity_container, activities)
+
+        elif event.event == RunEvent.tool_call_completed:
+            if activities:
+                activities[-1]["status_icon"] = "✅"
+                # Get result preview
+                result = event.tool.result
+                if isinstance(result, str):
+                    preview = result[:200] + "..." if len(result) > 200 else result
+                else:
+                    preview = str(result)[:200]
+                activities[-1]["result_preview"] = preview
+                render_activities(activity_container, activities)
+
+        elif event.event == RunEvent.run_completed:
+            final_response = event
+
+    return final_response, activities
+
+
 # Main: Research Form
 with st.form("research_form"):
     st.subheader("Enter Company URLs")
@@ -95,6 +183,10 @@ if submitted:
     if not website_url:
         st.error("Website URL is required")
     else:
+        # Reset state
+        st.session_state.activities = []
+        st.session_state.research_complete = False
+
         # Build research prompt
         urls_text = f"Website: {website_url}"
         if instagram_url:
@@ -108,13 +200,18 @@ Also search the knowledge base for relevant Growth Foundry services that could h
 URLs:
 {urls_text}"""
 
-        # Show progress
-        with st.status("🔍 Researching...", expanded=True) as status:
-            st.write("Browsing company URLs...")
-            st.write("Searching knowledge base for relevant services...")
+        # Show progress with activity panel
+        st.markdown("### 🔄 Agent Activity")
+        activity_placeholder = st.empty()
 
+        with st.status("🔍 Researching...", expanded=True) as status:
             try:
-                response = agent.run(prompt)
+                # Run async agent
+                response, activities = asyncio.run(
+                    run_research_with_streaming(agent, prompt)
+                )
+                st.session_state.activities = activities
+                st.session_state.research_complete = True
                 status.update(label="✅ Research complete!", state="complete")
 
             except Exception as e:
@@ -125,7 +222,7 @@ URLs:
         # Display results
         st.divider()
 
-        if response.content:
+        if response and response.content:
             report = response.content
 
             # Check if it's a Pydantic model (has model_dump) or dict
@@ -160,7 +257,16 @@ URLs:
                     st.subheader("💡 AI Opportunities")
                     for i, opp in enumerate(report.ai_opportunities, 1):
                         with st.expander(f"{i}. {opp.area}: {opp.opportunity} ({opp.complexity} complexity)"):
-                            st.write(opp.rationale)
+                            st.write(f"**Rationale:** {opp.rationale}")
+
+                            # Show evidence if available (Phase 2)
+                            if hasattr(opp, 'evidence') and opp.evidence:
+                                st.markdown("**Evidence:**")
+                                for ev in opp.evidence:
+                                    st.markdown(f"- {ev.claim}")
+                                    st.caption(f"Source: [{ev.source_url}]({ev.source_url})")
+                                    if ev.excerpt:
+                                        st.info(f'"{ev.excerpt}"')
 
                 if report.outreach_hooks:
                     st.subheader("🎯 Outreach Hooks")
@@ -174,7 +280,21 @@ URLs:
                 if report.sources:
                     st.subheader("🔗 Sources")
                     for source in report.sources:
-                        st.write(f"- {source}")
+                        st.write(f"- [{source}]({source})")
+
+                # Show research quality metrics if available (Phase 5)
+                if hasattr(report, 'research_quality') and report.research_quality:
+                    rq = report.research_quality
+                    st.subheader("📊 Research Quality")
+                    cols = st.columns(4)
+                    with cols[0]:
+                        st.metric("Sources Found", rq.sources_found)
+                    with cols[1]:
+                        st.metric("URLs Scraped", rq.urls_successfully_scraped)
+                    with cols[2]:
+                        st.metric("Evidence Pieces", rq.evidence_pieces)
+                    with cols[3]:
+                        st.metric("Quality Score", rq.quality_score)
             else:
                 # Fallback to raw display
                 st.markdown(str(response.content))

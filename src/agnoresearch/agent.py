@@ -8,7 +8,7 @@ from agno.db.sqlite import SqliteDb
 from agno.knowledge.knowledge import Knowledge
 
 from .schemas import CompanyResearchReport
-from .tools import browse_url
+from .tools import browse_url, search_facebook, browse_instagram
 from .knowledge import create_knowledge_base
 from .prompts import SYSTEM_PROMPT, INSTRUCTIONS
 
@@ -42,7 +42,7 @@ def create_research_agent(
     return Agent(
         name="SME Research Agent",
         model=Ollama(id=model_id),
-        tools=[browse_url],
+        tools=[browse_url, search_facebook, browse_instagram],
         knowledge=knowledge,
         search_knowledge=True,
         description=SYSTEM_PROMPT,

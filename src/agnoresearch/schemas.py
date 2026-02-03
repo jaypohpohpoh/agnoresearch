@@ -21,6 +21,21 @@ class ResearchTarget(BaseModel):
         return urls
 
 
+class CitedEvidence(BaseModel):
+    """Evidence with mandatory source citation."""
+
+    claim: str = Field(..., description="The factual claim or observation")
+    source_url: str = Field(..., description="URL where this information was found")
+    source_type: str = Field(
+        ...,
+        description="Type of source: website, facebook, instagram, knowledge_base"
+    )
+    excerpt: str = Field(
+        default="",
+        description="Direct quote or excerpt from the source supporting this claim"
+    )
+
+
 class AIOpportunity(BaseModel):
     """A specific AI adoption opportunity for the SME."""
 
@@ -28,6 +43,10 @@ class AIOpportunity(BaseModel):
     opportunity: str = Field(..., description="Specific AI application")
     rationale: str = Field(..., description="Why this fits their business based on research")
     complexity: str = Field(..., description="Low/Medium/High implementation complexity")
+    evidence: list[CitedEvidence] = Field(
+        default_factory=list,
+        description="Evidence supporting this opportunity - must have at least one piece"
+    )
 
 
 class SocialMediaInsight(BaseModel):
@@ -38,6 +57,20 @@ class SocialMediaInsight(BaseModel):
     posting_frequency: Optional[str] = Field(None, description="How often they post")
     content_themes: list[str] = Field(default_factory=list, description="Main topics they post about")
     engagement_level: Optional[str] = Field(None, description="High/Medium/Low based on likes/comments")
+    source_url: str = Field(default="", description="URL this data came from")
+
+
+class ResearchQuality(BaseModel):
+    """Metrics about research thoroughness and data quality."""
+
+    sources_found: int = Field(default=0, description="Total number of sources accessed")
+    urls_successfully_scraped: int = Field(default=0, description="URLs that returned useful data")
+    urls_failed: int = Field(default=0, description="URLs that failed or were blocked")
+    evidence_pieces: int = Field(default=0, description="Total evidence citations in report")
+    quality_score: str = Field(
+        default="Medium",
+        description="High (5+ sources, all URLs worked), Medium (3-4 sources), Low (<3 sources)"
+    )
 
 
 class CompanyResearchReport(BaseModel):
@@ -49,15 +82,18 @@ class CompanyResearchReport(BaseModel):
     # Section 1: Company Overview
     overview: str = Field(..., description="What the company does, size indicators, market position")
 
-    # Section 2: Products/Services
+    # Section 2: Products/Services (with citations)
     products_services: list[str] = Field(default_factory=list, description="Main offerings")
 
     # Section 3: Digital Presence
     digital_maturity: str = Field(..., description="Assessment of tech adoption based on online presence")
     social_insights: list[SocialMediaInsight] = Field(default_factory=list)
 
-    # Section 4: AI Opportunities
-    ai_opportunities: list[AIOpportunity] = Field(default_factory=list, description="Ranked AI adoption opportunities")
+    # Section 4: AI Opportunities (with evidence)
+    ai_opportunities: list[AIOpportunity] = Field(
+        default_factory=list,
+        description="Ranked AI adoption opportunities with supporting evidence"
+    )
 
     # Section 5: Outreach Hooks
     outreach_hooks: list[str] = Field(
@@ -66,7 +102,16 @@ class CompanyResearchReport(BaseModel):
     )
 
     # Section 6: Sources
-    sources: list[str] = Field(default_factory=list, description="URLs that were successfully scraped")
+    sources: list[str] = Field(
+        default_factory=list,
+        description="All URLs that were successfully accessed and provided data"
+    )
+
+    # Section 7: Research Quality
+    research_quality: Optional[ResearchQuality] = Field(
+        default=None,
+        description="Metrics about research thoroughness"
+    )
 
     # Metadata
     data_quality: str = Field(default="Medium", description="High/Medium/Low based on available info")
