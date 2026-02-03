@@ -2,12 +2,269 @@
 
 import asyncio
 import os
+import time
 from pathlib import Path
 from agno.tools import tool
+
+from .schemas import ScrapedContent
 
 
 # Session storage for Instagram
 INSTAGRAM_SESSION_PATH = Path("data/instagram_session.json")
+
+# Retry configuration
+MAX_RETRIES = 2
+RETRY_DELAY_SECONDS = 2
+MAX_CONTENT_LENGTH = 8000
+
+
+def scrape_website(url: str) -> ScrapedContent:
+    """
+    Scrape a website URL and return structured content.
+
+    Args:
+        url: The URL to scrape.
+
+    Returns:
+        ScrapedContent with success status and content/error.
+    """
+    for attempt in range(MAX_RETRIES):
+        try:
+            content = asyncio.run(_browse_url_async(url))
+
+            # Check for failure indicators in content
+            if content.startswith("Failed to fetch") or content.startswith("Error"):
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(RETRY_DELAY_SECONDS)
+                    continue
+                return ScrapedContent(url=url, success=False, error=content)
+
+            # Truncate content if too long
+            if len(content) > MAX_CONTENT_LENGTH:
+                content = content[:MAX_CONTENT_LENGTH] + "\n\n[Content truncated...]"
+
+            return ScrapedContent(
+                url=url,
+                success=True,
+                content=content,
+                content_length=len(content),
+            )
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAY_SECONDS)
+                continue
+            return ScrapedContent(url=url, success=False, error=str(e))
+
+    return ScrapedContent(url=url, success=False, error="Max retries exceeded")
+
+
+def scrape_social(url: str) -> ScrapedContent:
+    """
+    Scrape a social media URL (Instagram or Facebook).
+
+    Args:
+        url: The social media URL to scrape.
+
+    Returns:
+        ScrapedContent with success status and content/error.
+    """
+    url_lower = url.lower()
+
+    if "facebook.com" in url_lower:
+        # Facebook blocks direct scraping - use search instead
+        return ScrapedContent(
+            url=url,
+            success=False,
+            error="Facebook blocks direct scraping. Use search_facebook_structured instead.",
+        )
+
+    if "instagram.com" in url_lower:
+        for attempt in range(MAX_RETRIES):
+            try:
+                content = asyncio.run(_browse_instagram_async(url))
+
+                # Check for failure indicators
+                if "Failed to fetch" in content or "Error" in content:
+                    if attempt < MAX_RETRIES - 1:
+                        time.sleep(RETRY_DELAY_SECONDS)
+                        continue
+                    return ScrapedContent(url=url, success=False, error=content)
+
+                # Check for limited data (login wall)
+                if "may require login" in content.lower() or len(content.strip()) < 200:
+                    return ScrapedContent(
+                        url=url,
+                        success=False,
+                        error="Instagram returned limited data - may require login or profile is private",
+                        content=content,
+                        content_length=len(content),
+                    )
+
+                if len(content) > MAX_CONTENT_LENGTH:
+                    content = content[:MAX_CONTENT_LENGTH] + "\n\n[Content truncated...]"
+
+                return ScrapedContent(
+                    url=url,
+                    success=True,
+                    content=content,
+                    content_length=len(content),
+                )
+            except Exception as e:
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(RETRY_DELAY_SECONDS)
+                    continue
+                return ScrapedContent(url=url, success=False, error=str(e))
+
+    return ScrapedContent(url=url, success=False, error=f"Unsupported social platform: {url}")
+
+
+def search_facebook_structured(company_name: str, location: str = "Singapore") -> ScrapedContent:
+    """
+    Search for a company's Facebook presence via DuckDuckGo.
+
+    Args:
+        company_name: Name of the company to search for.
+        location: Location to narrow search (default: Singapore).
+
+    Returns:
+        ScrapedContent with search results.
+    """
+    try:
+        from duckduckgo_search import DDGS
+
+        query = f"site:facebook.com {company_name} {location}"
+
+        with DDGS() as ddg:
+            results = list(ddg.text(query, max_results=5))
+
+        if not results:
+            return ScrapedContent(
+                url=f"search:facebook:{company_name}",
+                success=False,
+                error=f"No Facebook results found for '{company_name}' in {location}.",
+            )
+
+        output = f"# Facebook Search Results for {company_name}\n\n"
+        output += f"Search query: `{query}`\n\n"
+
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "Untitled")
+            href = r.get("href", "N/A")
+            body = r.get("body", "No description available")
+
+            output += f"## {i}. {title}\n"
+            output += f"**URL:** {href}\n"
+            output += f"**Snippet:** {body}\n\n"
+
+        return ScrapedContent(
+            url=f"search:facebook:{company_name}",
+            success=True,
+            content=output,
+            content_length=len(output),
+        )
+
+    except ImportError:
+        return ScrapedContent(
+            url=f"search:facebook:{company_name}",
+            success=False,
+            error="duckduckgo-search not installed",
+        )
+    except Exception as e:
+        return ScrapedContent(
+            url=f"search:facebook:{company_name}",
+            success=False,
+            error=str(e),
+        )
+
+
+def search_google_reviews(company_name: str, location: str = "") -> ScrapedContent:
+    """
+    Search for a company's Google reviews via DuckDuckGo.
+
+    Args:
+        company_name: Name of the company to search for.
+        location: Optional location to narrow search.
+
+    Returns:
+        ScrapedContent with review information.
+    """
+    try:
+        from duckduckgo_search import DDGS
+        import re
+
+        # Search for Google reviews
+        location_str = f" {location}" if location else ""
+        query = f'"{company_name}"{location_str} reviews rating stars'
+
+        with DDGS() as ddg:
+            results = list(ddg.text(query, max_results=8))
+
+        if not results:
+            return ScrapedContent(
+                url=f"search:reviews:{company_name}",
+                success=False,
+                error=f"No review results found for '{company_name}'.",
+            )
+
+        output = f"# Review Search Results for {company_name}\n\n"
+
+        # Try to extract rating info from snippets
+        rating_found = None
+        review_count = None
+
+        for r in results:
+            body = r.get("body", "")
+            # Look for rating patterns like "4.8 stars", "4.8/5", "Rating: 4.8"
+            rating_match = re.search(r'(\d+\.?\d*)\s*(?:stars?|/5|out of 5)', body, re.IGNORECASE)
+            if rating_match and not rating_found:
+                rating_found = rating_match.group(1)
+
+            # Look for review count patterns like "200 reviews", "(200)"
+            count_match = re.search(r'(\d+(?:,\d+)?)\s*reviews?', body, re.IGNORECASE)
+            if count_match and not review_count:
+                review_count = count_match.group(1)
+
+        if rating_found:
+            output += f"**Rating Found:** {rating_found} stars\n"
+        if review_count:
+            output += f"**Review Count:** {review_count}\n"
+        output += "\n"
+
+        # Include relevant snippets
+        output += "## Review Snippets\n\n"
+        for i, r in enumerate(results[:5], 1):
+            title = r.get("title", "Untitled")
+            body = r.get("body", "No description available")
+            href = r.get("href", "")
+
+            output += f"**{i}. {title}**\n"
+            output += f"{body}\n"
+            if href:
+                output += f"Source: {href}\n"
+            output += "\n"
+
+        return ScrapedContent(
+            url=f"search:reviews:{company_name}",
+            success=True,
+            content=output,
+            content_length=len(output),
+        )
+
+    except ImportError:
+        return ScrapedContent(
+            url=f"search:reviews:{company_name}",
+            success=False,
+            error="duckduckgo-search not installed",
+        )
+    except Exception as e:
+        return ScrapedContent(
+            url=f"search:reviews:{company_name}",
+            success=False,
+            error=str(e),
+        )
+
+
+# Legacy tool wrappers for backward compatibility with Agno agent tools
 
 
 @tool

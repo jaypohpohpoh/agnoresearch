@@ -18,7 +18,7 @@ from .schemas import (
     ResearchQuality,
     OutreachDrafts,
 )
-from .tools import scrape_website, scrape_social, search_facebook_structured
+from .tools import scrape_website, scrape_social, search_facebook_structured, search_google_reviews
 from .agents import create_extractor_agent, create_analyzer_agent, create_outreach_agent
 
 
@@ -52,11 +52,13 @@ def stage_scrape(
     instagram_url: Optional[str] = None,
     facebook_url: Optional[str] = None,
     company_name: Optional[str] = None,
+    location: Optional[str] = None,
 ) -> list[ScrapedContent]:
     """
     Stage 1: Data Collection (Python functions, no LLM).
 
     Fetches raw content from URLs with retry logic.
+    Now includes review search for personalization data.
     """
     results = []
 
@@ -83,10 +85,15 @@ def stage_scrape(
         search_result = search_facebook_structured(company_name)
         results.append(search_result)
 
+    # Search for reviews if we have company name (gold for personalization)
+    if company_name:
+        review_result = search_google_reviews(company_name, location or "")
+        results.append(review_result)
+
     return results
 
 
-def stage_extract(scrape_results: list[ScrapedContent], model_id: str = "qwen2.5:14b") -> Optional[CompanyFacts]:
+def stage_extract(scrape_results: list[ScrapedContent], model_id: str = "gpt-oss:20b") -> Optional[CompanyFacts]:
     """
     Stage 2: Extraction (Simple LLM task).
 
@@ -118,13 +125,14 @@ Source URL: {primary_content.url}
     return None
 
 
-def stage_analyze(facts: CompanyFacts, model_id: str = "qwen2.5:14b") -> Optional[Opportunities]:
+def stage_analyze(facts: CompanyFacts, model_id: str = "gpt-oss:20b") -> Optional[Opportunities]:
     """
-    Stage 3: Analysis (Simple LLM task).
+    Stage 3: Analysis (LLM task).
 
-    Suggests AI opportunities based on extracted facts.
+    Suggests AI opportunities AND generates conversation starters for outreach.
     """
-    prompt = f"""Based on these extracted company facts, suggest 2-4 AI opportunities:
+    prompt = f"""Based on these extracted company facts, suggest 2-4 AI opportunities
+AND generate 2-3 conversation starters for outreach:
 
 Company: {facts.company_name}
 Industry: {facts.industry}
@@ -132,10 +140,17 @@ What they do: {facts.what_they_do}
 Products/Services: {', '.join(facts.products)}
 Source: {facts.source_url}
 
-Remember:
+For AI opportunities:
 - Reference specific data from the facts in your 'why' field
 - Focus on proven AI solutions (chatbots, automation, forecasting)
-- Prefer Low/Medium complexity for budget-conscious SMEs
+- Prefer Low/Medium complexity
+
+For conversation_starters (IMPORTANT for outreach personalization):
+- Generate 2-3 hooks based on the research
+- Each needs: topic, hook_text (a genuine question), data_point (supporting fact)
+- These will be used to write personalized outreach messages
+
+Set recommended_hook to the best type: 'rating_praise', 'growth_signal', 'industry_question', or 'specific_service'
 """
 
     agent = create_analyzer_agent(model_id=model_id)
@@ -150,35 +165,55 @@ Remember:
 def stage_outreach(
     facts: CompanyFacts,
     opps: Opportunities,
-    model_id: str = "qwen2.5:14b",
+    review_content: Optional[str] = None,
+    model_id: Optional[str] = None,
 ) -> Optional[OutreachDrafts]:
     """
     Stage 5: Outreach Writing (LLM task).
 
     Generates personalized WhatsApp and email drafts based on research.
+    Uses conversation_starters from analysis for better hooks.
     """
-    # Get the best opportunity to highlight
-    best_opp = opps.items[0] if opps.items else None
+    # Format conversation starters if available
+    starters_text = ""
+    if opps.conversation_starters:
+        starters_text = "\n## Conversation Starters (use these as hooks)\n"
+        for starter in opps.conversation_starters:
+            starters_text += f"- [{starter.topic}] {starter.hook_text}\n"
+            starters_text += f"  Data point: {starter.data_point}\n"
 
-    prompt = f"""Write outreach messages for this company:
+    # Get recommended hook type
+    hook_type = opps.recommended_hook or "industry_question"
 
+    # Format review info if available
+    review_text = ""
+    if review_content:
+        review_text = f"\n## Review Data\n{review_content[:500]}\n"
+
+    prompt = f"""Write FIRST-CONTACT outreach messages for this company.
+
+## Company Research
 Company: {facts.company_name}
 Industry: {facts.industry}
 What they do: {facts.what_they_do}
 Products/Services: {', '.join(facts.products)}
+{review_text}
+{starters_text}
 
-Best AI Opportunity: {best_opp.area} - {best_opp.idea if best_opp else 'General AI consultation'}
-Why it fits: {best_opp.why if best_opp else 'Could benefit from AI adoption'}
+## Recommended Hook Type: {hook_type}
 
-Write personalized outreach:
-1. 1-2 WhatsApp messages (short, friendly, 50-100 words each)
-2. 1-2 Email drafts (professional but warm, 100-200 words with subject line)
+## Task
+Write personalized outreach that starts a conversation (NOT a pitch):
 
-Make them personal by referencing their specific business details.
-Sign off from Growth Foundry with a soft CTA (happy to chat, book a call).
+1. WhatsApp (80-120 words): Observation → Question → Soft-connect
+2. Email (150-200 words with subject): Observation → Insight → Question → Soft-connect
+
+Use specific details from the research above. The recipient should NOT know what you're selling.
+Sign off with "— JP"
 """
 
-    agent = create_outreach_agent(model_id=model_id)
+    # Use default model if not specified (Sonnet for outreach)
+    agent = create_outreach_agent(model_id=model_id) if model_id else create_outreach_agent()
     response = agent.run(prompt)
 
     if response and response.content:
@@ -284,7 +319,9 @@ def run_pipeline(
     website_url: str,
     instagram_url: Optional[str] = None,
     facebook_url: Optional[str] = None,
-    model_id: str = "qwen2.5:14b",
+    company_name: Optional[str] = None,
+    location: Optional[str] = None,
+    model_id: Optional[str] = None,
 ) -> CompanyResearchReport:
     """
     Run the full research pipeline.
@@ -293,23 +330,27 @@ def run_pipeline(
         website_url: Company website URL (required)
         instagram_url: Instagram profile URL (optional)
         facebook_url: Facebook page URL (optional)
-        model_id: Ollama model to use for LLM stages
+        company_name: Company name (optional, extracted from website if not provided)
+        location: Location for review search (optional)
+        model_id: Model to use for LLM stages (default: gpt-oss:20b)
 
     Returns:
         CompanyResearchReport with research results
 
     Pipeline stages:
-        1. Scrape: Fetch content from URLs
+        1. Scrape: Fetch content from URLs + reviews
         2. Extract: Pull facts from content (LLM)
-        3. Analyze: Suggest AI opportunities (LLM)
+        3. Analyze: Suggest AI opportunities + conversation hooks (LLM)
         4. Outreach: Write personalized drafts (LLM)
         5. Assemble: Build final report (Python)
     """
-    # Stage 1: Scrape
+    # Stage 1: Scrape (includes review search if company_name provided)
     scrape_results = stage_scrape(
         website_url=website_url,
         instagram_url=instagram_url,
         facebook_url=facebook_url,
+        company_name=company_name,
+        location=location,
     )
 
     # Validation checkpoint 1
@@ -317,30 +358,44 @@ def run_pipeline(
         return assemble_report(facts=None, opps=None, scrape_results=scrape_results)
 
     # Stage 2: Extract
-    facts = stage_extract(scrape_results, model_id=model_id)
+    extract_model = model_id or "gpt-oss:20b"
+    facts = stage_extract(scrape_results, model_id=extract_model)
 
     # Validation checkpoint 2
     if not facts or not validate_facts(facts):
         return assemble_report(facts=facts, opps=None, scrape_results=scrape_results)
 
-    # Now we have company name - try Facebook search if we don't have Facebook content
+    # Now we have company name - search for additional data if not already done
     fb_results = [r for r in scrape_results if "facebook" in r.url.lower()]
     if not any(r.success for r in fb_results):
-        # Search for Facebook presence using extracted company name
         fb_search = search_facebook_structured(facts.company_name)
         scrape_results.append(fb_search)
 
-    # Stage 3: Analyze
-    opps = stage_analyze(facts, model_id=model_id)
+    # Search for reviews if we didn't have company name earlier
+    review_results = [r for r in scrape_results if "reviews" in r.url.lower()]
+    if not review_results:
+        review_search = search_google_reviews(facts.company_name, location or "")
+        scrape_results.append(review_search)
+
+    # Stage 3: Analyze (generates conversation_starters and recommended_hook)
+    opps = stage_analyze(facts, model_id=extract_model)
 
     # Validation checkpoint 3 (soft - we can still return partial report)
     if not opps or not validate_opportunities(opps):
         opps = None
 
     # Stage 4: Outreach (only if we have facts and opportunities)
+    # Uses Sonnet by default for better writing quality
     outreach_drafts = None
     if facts and opps:
-        outreach_drafts = stage_outreach(facts, opps, model_id=model_id)
+        # Get review content for personalization
+        review_content = None
+        for r in scrape_results:
+            if "reviews" in r.url.lower() and r.success:
+                review_content = r.content
+                break
+
+        outreach_drafts = stage_outreach(facts, opps, review_content=review_content)
 
     # Stage 5: Assemble
     return assemble_report(
@@ -357,22 +412,28 @@ def run_pipeline(
 
 if __name__ == "__main__":
     import sys
+    import argparse
 
-    if len(sys.argv) < 2:
-        print("Usage: python -m src.agnoresearch.pipeline <website_url> [instagram_url] [facebook_url]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="SME Research Pipeline")
+    parser.add_argument("website_url", help="Company website URL")
+    parser.add_argument("--instagram", help="Instagram profile URL")
+    parser.add_argument("--facebook", help="Facebook page URL")
+    parser.add_argument("--company", help="Company name (for review search)")
+    parser.add_argument("--location", help="Location (for review search)")
+    parser.add_argument("--model", default=None, help="Model ID (default: Claude Haiku)")
 
-    website = sys.argv[1]
-    instagram = sys.argv[2] if len(sys.argv) > 2 else None
-    facebook = sys.argv[3] if len(sys.argv) > 3 else None
+    args = parser.parse_args()
 
-    print(f"Running pipeline for: {website}")
+    print(f"Running pipeline for: {args.website_url}")
     print("=" * 60)
 
     report = run_pipeline(
-        website_url=website,
-        instagram_url=instagram,
-        facebook_url=facebook,
+        website_url=args.website_url,
+        instagram_url=args.instagram,
+        facebook_url=args.facebook,
+        company_name=args.company,
+        location=args.location,
+        model_id=args.model,
     )
 
     print("\nRESULT:")
@@ -394,13 +455,13 @@ if __name__ == "__main__":
         print("\n" + "=" * 60)
         print("OUTREACH DRAFTS:")
         print("=" * 60)
-        print("\n📱 WhatsApp:")
+        print("\nWhatsApp:")
         for i, draft in enumerate(report.outreach_drafts.whatsapp_drafts, 1):
             print(f"\n--- Draft {i} ---")
             print(draft.body)
             print(f"(Personalized: {draft.personalization_used})")
 
-        print("\n📧 Email:")
+        print("\nEmail:")
         for i, draft in enumerate(report.outreach_drafts.email_drafts, 1):
             print(f"\n--- Draft {i} ---")
             if draft.subject:

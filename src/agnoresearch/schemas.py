@@ -48,10 +48,27 @@ class Opportunity(BaseModel):
     complexity: Literal["Low", "Medium", "High"] = Field(..., description="Implementation complexity")
 
 
+class ConversationStarter(BaseModel):
+    """A hook for starting conversation in outreach."""
+
+    topic: str = Field(..., description="Topic category (e.g., 'volume_handling', 'reviews', 'growth')")
+    hook_text: str = Field(..., description="The actual question or observation to use")
+    data_point: str = Field(..., description="Specific fact from research that supports this hook")
+
+
 class Opportunities(BaseModel):
     """List of AI opportunities from analysis."""
 
     items: list[Opportunity] = Field(..., min_length=1, max_length=4, description="2-4 AI opportunities")
+    conversation_starters: list[ConversationStarter] = Field(
+        default_factory=list,
+        max_length=3,
+        description="2-3 conversation hooks for outreach based on research"
+    )
+    recommended_hook: Optional[str] = Field(
+        default=None,
+        description="Best hook type: 'rating_praise', 'growth_signal', 'industry_question', 'specific_service'"
+    )
 
 
 class ResearchTarget(BaseModel):

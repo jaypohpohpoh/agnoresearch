@@ -14,7 +14,12 @@ from .prompts import (
 )
 
 
-def create_extractor_agent(model_id: str = "qwen2.5:14b") -> Agent:
+# Default model configuration - using best available local model
+DEFAULT_MODEL = "gpt-oss:20b"  # Largest available model (20B params)
+OUTREACH_MODEL = "gpt-oss:20b"
+
+
+def create_extractor_agent(model_id: str = DEFAULT_MODEL) -> Agent:
     """
     Create the CompanyExtractor agent.
 
@@ -32,13 +37,13 @@ def create_extractor_agent(model_id: str = "qwen2.5:14b") -> Agent:
     )
 
 
-def create_analyzer_agent(model_id: str = "qwen2.5:14b") -> Agent:
+def create_analyzer_agent(model_id: str = DEFAULT_MODEL) -> Agent:
     """
     Create the OpportunityAnalyzer agent.
 
-    Purpose: Suggest AI opportunities based on extracted facts.
+    Purpose: Suggest AI opportunities and conversation starters.
     Input: CompanyFacts
-    Output: Opportunities (list of 2-4)
+    Output: Opportunities (with conversation_starters and recommended_hook)
     """
     return Agent(
         name="Opportunity Analyzer",
@@ -50,12 +55,12 @@ def create_analyzer_agent(model_id: str = "qwen2.5:14b") -> Agent:
     )
 
 
-def create_outreach_agent(model_id: str = "qwen2.5:14b") -> Agent:
+def create_outreach_agent(model_id: str = OUTREACH_MODEL) -> Agent:
     """
     Create the OutreachWriter agent.
 
     Purpose: Write personalized outreach messages based on research.
-    Input: CompanyFacts + Opportunities
+    Input: CompanyFacts + Opportunities (with hooks)
     Output: OutreachDrafts (WhatsApp + Email)
     """
     return Agent(
@@ -113,7 +118,8 @@ def test_analyzer():
     )
 
     agent = create_analyzer_agent()
-    prompt = f"""Based on these extracted company facts, suggest 2-4 AI opportunities:
+    prompt = f"""Based on these extracted company facts, suggest 2-4 AI opportunities
+AND generate 2-3 conversation starters for outreach:
 
 Company: {sample_facts.company_name}
 Industry: {sample_facts.industry}
@@ -130,11 +136,11 @@ Products/Services: {', '.join(sample_facts.products)}
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Testing Extractor Agent")
+    print("Testing Extractor Agent (Claude Haiku)")
     print("=" * 60)
     test_extractor()
 
     print("\n" + "=" * 60)
-    print("Testing Analyzer Agent")
+    print("Testing Analyzer Agent (Claude Haiku)")
     print("=" * 60)
     test_analyzer()
