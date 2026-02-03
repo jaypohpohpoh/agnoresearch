@@ -130,7 +130,7 @@ def search_facebook_structured(company_name: str, location: str = "Singapore") -
         ScrapedContent with search results.
     """
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         query = f"site:facebook.com {company_name} {location}"
 
@@ -189,7 +189,7 @@ def search_google_reviews(company_name: str, location: str = "") -> ScrapedConte
         ScrapedContent with review information.
     """
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
         import re
 
         # Search for Google reviews
@@ -310,7 +310,7 @@ def search_facebook(company_name: str, location: str = "Singapore") -> str:
         Facebook search results with page information and snippets.
     """
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         query = f"site:facebook.com {company_name} {location}"
 

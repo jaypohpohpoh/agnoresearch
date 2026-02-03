@@ -12,7 +12,7 @@ dependencies = [
     "lancedb>=0.6.0",
     "pypdf>=4.0.0",
     "sqlalchemy>=2.0.0",
-    "duckduckgo-search>=6.0.0",
+    "ddgs>=8.0.0",
     "python-dotenv>=1.0.0",
     "nest-asyncio>=1.6.0",
 ]

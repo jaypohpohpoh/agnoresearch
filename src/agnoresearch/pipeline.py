@@ -413,6 +413,10 @@ def run_pipeline(
 if __name__ == "__main__":
     import sys
     import argparse
+    import warnings
+
+    # Suppress unclosed socket warnings from Ollama client (harmless on exit)
+    warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed.*socket")
 
     parser = argparse.ArgumentParser(description="SME Research Pipeline")
     parser.add_argument("website_url", help="Company website URL")
