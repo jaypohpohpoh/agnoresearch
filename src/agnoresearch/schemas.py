@@ -1,7 +1,57 @@
 """Pydantic schemas for research agent input/output."""
 
 from pydantic import BaseModel, Field, HttpUrl
-from typing import Optional
+from typing import Literal, Optional, ForwardRef
+
+
+# =============================================================================
+# Stage 1: Scraping Output (Python functions, no LLM)
+# =============================================================================
+
+
+class ScrapedContent(BaseModel):
+    """Output from scraping a URL."""
+
+    url: str = Field(..., description="The URL that was scraped")
+    success: bool = Field(..., description="Whether scraping succeeded")
+    content: str = Field(default="", description="Markdown content, max 8K chars")
+    error: Optional[str] = Field(default=None, description="Error message if failed")
+    content_length: int = Field(default=0, description="Length of content in characters")
+
+
+# =============================================================================
+# Stage 2: Extraction Output (Simple LLM task)
+# =============================================================================
+
+
+class CompanyFacts(BaseModel):
+    """Extracted facts from company content - NO analysis."""
+
+    company_name: str = Field(..., description="Company name as found on website")
+    industry: str = Field(..., description="Primary industry/sector")
+    what_they_do: str = Field(..., description="1-2 sentences describing what they do")
+    products: list[str] = Field(default_factory=list, max_length=5, description="Up to 5 products/services")
+    source_url: str = Field(..., description="URL this was extracted from")
+
+
+# =============================================================================
+# Stage 3: Analysis Output (Simple LLM task)
+# =============================================================================
+
+
+class Opportunity(BaseModel):
+    """A single AI opportunity suggestion."""
+
+    area: str = Field(..., description="Business area (e.g., 'Customer Service')")
+    idea: str = Field(..., description="Specific AI application (e.g., 'AI chatbot for FAQs')")
+    why: str = Field(..., description="Reference to extracted data supporting this")
+    complexity: Literal["Low", "Medium", "High"] = Field(..., description="Implementation complexity")
+
+
+class Opportunities(BaseModel):
+    """List of AI opportunities from analysis."""
+
+    items: list[Opportunity] = Field(..., min_length=1, max_length=4, description="2-4 AI opportunities")
 
 
 class ResearchTarget(BaseModel):
@@ -73,6 +123,33 @@ class ResearchQuality(BaseModel):
     )
 
 
+# =============================================================================
+# Stage 5: Outreach Drafts Output (LLM task)
+# =============================================================================
+
+
+class OutreachDraft(BaseModel):
+    """A single outreach message draft."""
+
+    channel: Literal["whatsapp", "email"] = Field(..., description="Message channel")
+    subject: Optional[str] = Field(default=None, description="Subject line (email only)")
+    body: str = Field(..., description="Message body")
+    personalization_used: str = Field(
+        ..., description="What data point made this personal (e.g., 'Their logistics services')"
+    )
+
+
+class OutreachDrafts(BaseModel):
+    """Collection of outreach drafts for WhatsApp and email."""
+
+    whatsapp_drafts: list[OutreachDraft] = Field(
+        ..., min_length=1, max_length=2, description="1-2 WhatsApp messages (short, conversational)"
+    )
+    email_drafts: list[OutreachDraft] = Field(
+        ..., min_length=1, max_length=2, description="1-2 email drafts (professional with subject)"
+    )
+
+
 class CompanyResearchReport(BaseModel):
     """Structured output: Research report for an SME prospect."""
 
@@ -95,7 +172,13 @@ class CompanyResearchReport(BaseModel):
         description="Ranked AI adoption opportunities with supporting evidence"
     )
 
-    # Section 5: Outreach Hooks
+    # Section 5: Outreach Drafts (ready-to-send messages)
+    outreach_drafts: Optional["OutreachDrafts"] = Field(
+        default=None,
+        description="Ready-to-send WhatsApp and email drafts"
+    )
+
+    # Legacy: Outreach Hooks (kept for backward compatibility)
     outreach_hooks: list[str] = Field(
         default_factory=list,
         description="Personalization angles for outreach based on research"

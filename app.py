@@ -1,12 +1,10 @@
 """Streamlit UI for SME Research Agent with real-time activity visibility."""
 
-import asyncio
 import nest_asyncio
 import streamlit as st
 from pathlib import Path
 
 from dotenv import load_dotenv
-from agno.agent import RunEvent
 
 # Load environment variables
 load_dotenv()
@@ -24,10 +22,9 @@ KNOWLEDGE_DIR = Path("data/knowledge")
 KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# Initialize knowledge base and agent (cached)
+# Initialize knowledge base (cached) - pipeline doesn't need the full agent
 @st.cache_resource
-def get_knowledge_and_agent():
-    from src.agnoresearch.agent import create_research_agent
+def get_knowledge():
     from src.agnoresearch.knowledge import create_knowledge_base, add_document_sync
 
     knowledge = create_knowledge_base()
@@ -40,11 +37,10 @@ def get_knowledge_and_agent():
             except Exception:
                 pass  # Skip files that fail to load
 
-    agent = create_research_agent(knowledge=knowledge)
-    return knowledge, agent
+    return knowledge
 
 
-knowledge, agent = get_knowledge_and_agent()
+knowledge = get_knowledge()
 
 # Sidebar: Knowledge Base Management
 with st.sidebar:
@@ -81,9 +77,15 @@ with st.sidebar:
         st.info("No documents uploaded yet")
 
 
-def run_research_sync(agent, prompt: str):
-    """Run agent synchronously."""
-    return agent.run(prompt)
+def run_research_pipeline(website_url: str, instagram_url: str = None, facebook_url: str = None):
+    """Run the research pipeline."""
+    from src.agnoresearch.pipeline import run_pipeline
+
+    return run_pipeline(
+        website_url=website_url,
+        instagram_url=instagram_url if instagram_url else None,
+        facebook_url=facebook_url if facebook_url else None,
+    )
 
 
 def display_report(report):
@@ -135,8 +137,36 @@ def display_report(report):
                         if ev.excerpt:
                             st.info(f'"{ev.excerpt}"')
 
-    # Outreach Hooks
-    if report.outreach_hooks:
+    # Outreach Drafts (new)
+    if report.outreach_drafts:
+        st.subheader("📱 WhatsApp Drafts")
+        for i, draft in enumerate(report.outreach_drafts.whatsapp_drafts, 1):
+            with st.expander(f"Draft {i}", expanded=(i == 1)):
+                st.text_area(
+                    "Message",
+                    draft.body,
+                    height=100,
+                    key=f"wa_draft_{i}",
+                    help="Copy this message to send via WhatsApp"
+                )
+                st.caption(f"✨ Personalized using: {draft.personalization_used}")
+
+        st.subheader("📧 Email Drafts")
+        for i, draft in enumerate(report.outreach_drafts.email_drafts, 1):
+            subject = draft.subject or "AI Solutions for Your Business"
+            with st.expander(f"Draft {i}: {subject}", expanded=(i == 1)):
+                st.text_input("Subject", subject, key=f"email_subject_{i}")
+                st.text_area(
+                    "Body",
+                    draft.body,
+                    height=150,
+                    key=f"email_body_{i}",
+                    help="Copy this email to send"
+                )
+                st.caption(f"✨ Personalized using: {draft.personalization_used}")
+
+    # Legacy: Outreach Hooks (if no drafts available)
+    elif report.outreach_hooks:
         st.subheader("🎯 Outreach Hooks")
         for hook in report.outreach_hooks:
             st.write(f"- {hook}")
@@ -193,36 +223,33 @@ if submitted:
     if not website_url:
         st.error("Website URL is required")
     else:
-        # Build research prompt
-        urls_text = f"Website: {website_url}"
-        if instagram_url:
-            urls_text += f"\nInstagram: {instagram_url}"
-        if facebook_url:
-            urls_text += f"\nFacebook: {facebook_url}"
+        # Show progress indicators for each pipeline stage
+        progress_container = st.container()
 
-        prompt = f"""Research this company using the provided URLs.
-Also search the knowledge base for relevant Growth Foundry services that could help them.
+        with progress_container:
+            stage_status = st.empty()
+            stage_status.info("🔍 Stage 1/4: Scraping URLs...")
 
-URLs:
-{urls_text}"""
+        try:
+            # Run the pipeline
+            with st.spinner("Running research pipeline..."):
+                stage_status.info("🔍 Stage 1/4: Scraping URLs...")
+                report = run_research_pipeline(
+                    website_url=website_url,
+                    instagram_url=instagram_url if instagram_url else None,
+                    facebook_url=facebook_url if facebook_url else None,
+                )
 
-        # Show progress and run research
-        with st.spinner("🔍 Researching..."):
-            try:
-                response = run_research_sync(agent, prompt)
-            except Exception as e:
-                st.error(f"❌ Research failed: {str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
-                response = None
+            # Clear progress
+            stage_status.empty()
 
-        # Display results immediately after research
-        if response and response.content:
-            report = response.content
-            if hasattr(report, 'company_name'):
+            # Display results
+            if report and hasattr(report, 'company_name'):
                 display_report(report)
             else:
-                st.success("✅ Research complete!")
-                st.markdown(str(response.content))
-        elif response:
-            st.warning("Research completed but no structured content returned")
+                st.warning("Research completed but no structured content returned")
+
+        except Exception as e:
+            st.error(f"❌ Research failed: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
