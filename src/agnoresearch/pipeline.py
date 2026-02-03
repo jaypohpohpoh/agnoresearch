@@ -388,3 +388,22 @@ if __name__ == "__main__":
     print(f"Sources: {report.sources}")
     if report.research_notes:
         print(f"Notes: {report.research_notes}")
+
+    # Outreach Drafts
+    if report.outreach_drafts:
+        print("\n" + "=" * 60)
+        print("OUTREACH DRAFTS:")
+        print("=" * 60)
+        print("\n📱 WhatsApp:")
+        for i, draft in enumerate(report.outreach_drafts.whatsapp_drafts, 1):
+            print(f"\n--- Draft {i} ---")
+            print(draft.body)
+            print(f"(Personalized: {draft.personalization_used})")
+
+        print("\n📧 Email:")
+        for i, draft in enumerate(report.outreach_drafts.email_drafts, 1):
+            print(f"\n--- Draft {i} ---")
+            if draft.subject:
+                print(f"Subject: {draft.subject}")
+            print(draft.body)
+            print(f"(Personalized: {draft.personalization_used})")
