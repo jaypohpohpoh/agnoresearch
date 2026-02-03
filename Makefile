@@ -1,6 +1,14 @@
-.PHONY: run install setup clean
+.PHONY: run run-streamlit run-web install setup clean
 
-run:
+# Default: run the new Flask webapp
+run: run-web
+
+# Flask webapp (new playful UI)
+run-web:
+	uv run python web.py
+
+# Streamlit app (original)
+run-streamlit:
 	uv run streamlit run app.py
 
 install:

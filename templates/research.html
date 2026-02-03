@@ -1,0 +1,140 @@
+{% extends "layout.html" %}
+
+{% block title %}Research - Agno Research{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Research</h1>
+  <p class="page-subtitle">Enter a company's URLs to analyze their business and find AI opportunities</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"></circle>
+    <line x1="12" y1="8" x2="12" y2="12"></line>
+    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+  </svg>
+  <div>
+    <strong>Research Failed</strong>
+    <p style="margin: var(--space-xs) 0 0;">{{ error }}</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- Research Form -->
+<div class="card" style="margin-bottom: var(--space-xl);">
+  <form id="research-form" method="POST">
+    <div class="form-group">
+      <label class="form-label" for="website_url">
+        Website URL
+        <span style="color: var(--color-cta);">*</span>
+      </label>
+      <input
+        type="url"
+        id="website_url"
+        name="website_url"
+        class="form-input"
+        placeholder="https://company.com.sg"
+        required
+      >
+      <p class="form-hint">The company's main website - this is required</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label" for="instagram_url">
+          Instagram URL
+          <span class="form-label-optional">(optional)</span>
+        </label>
+        <input
+          type="url"
+          id="instagram_url"
+          name="instagram_url"
+          class="form-input"
+          placeholder="https://instagram.com/company"
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="facebook_url">
+          Facebook URL
+          <span class="form-label-optional">(optional)</span>
+        </label>
+        <input
+          type="url"
+          id="facebook_url"
+          name="facebook_url"
+          class="form-input"
+          placeholder="https://facebook.com/company"
+        >
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.3-4.3"></path>
+      </svg>
+      Start Research
+    </button>
+  </form>
+</div>
+
+<!-- Loading State -->
+<div id="loading-container" style="display: none;">
+  <div class="card" style="text-align: center; padding: var(--space-3xl);">
+    <div class="spinner" style="margin: 0 auto var(--space-lg);"></div>
+    <h3 style="margin-bottom: var(--space-sm);">Researching Company...</h3>
+    <p id="loading-stage" style="color: var(--color-text-muted);">Scraping website...</p>
+
+    <div style="margin-top: var(--space-xl); display: flex; justify-content: center; gap: var(--space-lg);">
+      <div style="text-align: center;">
+        <div class="skeleton" style="width: 48px; height: 48px; border-radius: var(--radius-lg); margin: 0 auto var(--space-sm);"></div>
+        <span style="font-size: 0.875rem; color: var(--color-text-muted);">Scrape</span>
+      </div>
+      <div style="text-align: center;">
+        <div class="skeleton" style="width: 48px; height: 48px; border-radius: var(--radius-lg); margin: 0 auto var(--space-sm);"></div>
+        <span style="font-size: 0.875rem; color: var(--color-text-muted);">Analyze</span>
+      </div>
+      <div style="text-align: center;">
+        <div class="skeleton" style="width: 48px; height: 48px; border-radius: var(--radius-lg); margin: 0 auto var(--space-sm);"></div>
+        <span style="font-size: 0.875rem; color: var(--color-text-muted);">Opportunities</span>
+      </div>
+      <div style="text-align: center;">
+        <div class="skeleton" style="width: 48px; height: 48px; border-radius: var(--radius-lg); margin: 0 auto var(--space-sm);"></div>
+        <span style="font-size: 0.875rem; color: var(--color-text-muted);">Drafts</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Results Container -->
+<div id="results-container" style="display: none;"></div>
+
+<!-- Tips Card -->
+<div class="card" style="background: var(--color-background); border: 1px solid var(--color-border);">
+  <h3 class="card-title" style="display: flex; align-items: center; gap: var(--space-sm);">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M12 16v-4"></path>
+      <path d="M12 8h.01"></path>
+    </svg>
+    Tips for Better Results
+  </h3>
+  <ul style="margin: 0; padding-left: var(--space-lg); color: var(--color-text-muted);">
+    <li style="margin-bottom: var(--space-sm);">
+      <strong>Start with just the website URL</strong> - Social media links can sometimes fail due to anti-bot protection
+    </li>
+    <li style="margin-bottom: var(--space-sm);">
+      <strong>Use the main company domain</strong> - Avoid subdomains or specific pages
+    </li>
+    <li style="margin-bottom: var(--space-sm);">
+      <strong>Upload knowledge documents first</strong> - This helps personalize the outreach messages
+    </li>
+    <li>
+      <strong>Research takes 30-60 seconds</strong> - The AI is scraping, analyzing, and generating drafts
+    </li>
+  </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,161 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard - Agno Research{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Dashboard</h1>
+  <p class="page-subtitle">Overview of your research activity</p>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{ total_research }}</div>
+    <div class="stat-label">Companies Researched</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ knowledge_count }}</div>
+    <div class="stat-label">Knowledge Documents</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ recent_research|length }}</div>
+    <div class="stat-label">Recent Research</div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card" style="margin-bottom: var(--space-xl);">
+  <h2 class="card-title" style="margin-bottom: var(--space-lg);">Quick Actions</h2>
+  <div style="display: flex; gap: var(--space-md); flex-wrap: wrap;">
+    <a href="{{ url_for('research') }}" class="btn btn-primary btn-lg">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.3-4.3"></path>
+      </svg>
+      New Research
+    </a>
+    <a href="{{ url_for('knowledge') }}" class="btn btn-secondary btn-lg">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      Upload Documents
+    </a>
+    <a href="{{ url_for('drafts') }}" class="btn btn-ghost btn-lg">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+      View Drafts
+    </a>
+  </div>
+</div>
+
+<!-- Recent Research -->
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">Recent Research</h2>
+    {% if recent_research %}
+    <a href="{{ url_for('research') }}" class="btn btn-sm btn-ghost">View All</a>
+    {% endif %}
+  </div>
+
+  {% if recent_research %}
+  <div class="table-container">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Industry</th>
+          <th>AI Opportunities</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in recent_research %}
+        <tr>
+          <td>
+            <strong>{{ item.company_name }}</strong>
+          </td>
+          <td>
+            <span class="badge badge-primary">{{ item.industry or 'Unknown' }}</span>
+          </td>
+          <td>
+            {{ item.ai_opportunities|length }} opportunities
+          </td>
+          <td>
+            <button class="btn btn-sm btn-ghost" onclick="alert('View details coming soon!')">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              View
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"></circle>
+      <path d="m21 21-4.3-4.3"></path>
+    </svg>
+    <h3 class="empty-state-title">No research yet</h3>
+    <p class="empty-state-text">Start by researching your first company prospect.</p>
+    <a href="{{ url_for('research') }}" class="btn btn-primary">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      Start Research
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Getting Started Guide -->
+{% if not recent_research %}
+<div class="card" style="margin-top: var(--space-xl); background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); color: white;">
+  <h2 class="card-title" style="color: white;">Getting Started</h2>
+  <div class="grid-3" style="margin-top: var(--space-lg);">
+    <div style="display: flex; gap: var(--space-md);">
+      <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        1
+      </div>
+      <div>
+        <strong>Upload Knowledge</strong>
+        <p style="margin: var(--space-xs) 0 0; opacity: 0.9; font-size: 0.875rem;">
+          Add your pitch decks, case studies, and service offerings to personalize outreach.
+        </p>
+      </div>
+    </div>
+    <div style="display: flex; gap: var(--space-md);">
+      <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        2
+      </div>
+      <div>
+        <strong>Research a Company</strong>
+        <p style="margin: var(--space-xs) 0 0; opacity: 0.9; font-size: 0.875rem;">
+          Enter a company website to analyze their business and find AI opportunities.
+        </p>
+      </div>
+    </div>
+    <div style="display: flex; gap: var(--space-md);">
+      <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        3
+      </div>
+      <div>
+        <strong>Send Outreach</strong>
+        <p style="margin: var(--space-xs) 0 0; opacity: 0.9; font-size: 0.875rem;">
+          Copy the AI-generated drafts and reach out via WhatsApp or email.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
