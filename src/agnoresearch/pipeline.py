@@ -20,6 +20,7 @@ from .schemas import (
 )
 from .tools import scrape_website, scrape_social, search_facebook_structured, search_google_reviews
 from .agents import create_extractor_agent, create_analyzer_agent, create_outreach_agent
+from .knowledge import create_knowledge_base, get_brand_context
 
 
 # =============================================================================
@@ -173,7 +174,26 @@ def stage_outreach(
 
     Generates personalized WhatsApp and email drafts based on research.
     Uses conversation_starters from analysis for better hooks.
+    Now includes KB context for brand voice/style guidance.
     """
+    # Retrieve brand context from knowledge base
+    kb = create_knowledge_base()
+    brand_context, kb_doc_names = get_brand_context(kb)
+
+    # Format KB context for prompt
+    kb_text = ""
+    if brand_context:
+        kb_text = f"""
+## Brand Guidelines (from Knowledge Base)
+{brand_context}
+
+IMPORTANT: Apply these brand guidelines to your writing. In each draft's knowledge_sources field,
+cite which document(s) you used and how (e.g., "Used brand voice guidelines for conversational tone").
+Available documents: {', '.join(kb_doc_names)}
+"""
+    else:
+        kb_text = "\n## Note: No brand guidelines found in knowledge base.\n"
+
     # Format conversation starters if available
     starters_text = ""
     if opps.conversation_starters:
@@ -199,7 +219,7 @@ What they do: {facts.what_they_do}
 Products/Services: {', '.join(facts.products)}
 {review_text}
 {starters_text}
-
+{kb_text}
 ## Recommended Hook Type: {hook_type}
 
 ## Task
@@ -210,6 +230,8 @@ Write personalized outreach that starts a conversation (NOT a pitch):
 
 Use specific details from the research above. The recipient should NOT know what you're selling.
 Sign off with "— JP"
+
+For each draft, you MUST fill in the knowledge_sources field citing which KB documents you used.
 """
 
     # Use default model if not specified (Sonnet for outreach)
@@ -288,6 +310,13 @@ def assemble_report(
     else:
         quality_score = "Low"
 
+    # Extract KB sources from outreach drafts
+    kb_sources_used: set[str] = set()
+    if outreach_drafts:
+        for draft in outreach_drafts.whatsapp_drafts + outreach_drafts.email_drafts:
+            for ref in draft.knowledge_sources:
+                kb_sources_used.add(ref.document_name)
+
     return CompanyResearchReport(
         company_name=facts.company_name,
         industry=facts.industry,
@@ -298,6 +327,7 @@ def assemble_report(
         outreach_drafts=outreach_drafts,
         outreach_hooks=[],  # Legacy field
         sources=[s.url for s in successful_scrapes],
+        knowledge_base_used=list(kb_sources_used),
         research_quality=ResearchQuality(
             sources_found=len(scrape_results),
             urls_successfully_scraped=len(successful_scrapes),
@@ -464,6 +494,8 @@ if __name__ == "__main__":
             print(f"\n--- Draft {i} ---")
             print(draft.body)
             print(f"(Personalized: {draft.personalization_used})")
+            if draft.knowledge_sources:
+                print(f"(KB Sources: {[ref.document_name for ref in draft.knowledge_sources]})")
 
         print("\nEmail:")
         for i, draft in enumerate(report.outreach_drafts.email_drafts, 1):
@@ -472,3 +504,13 @@ if __name__ == "__main__":
                 print(f"Subject: {draft.subject}")
             print(draft.body)
             print(f"(Personalized: {draft.personalization_used})")
+            if draft.knowledge_sources:
+                print(f"(KB Sources: {[ref.document_name for ref in draft.knowledge_sources]})")
+
+    # Knowledge Base Usage Summary
+    if report.knowledge_base_used:
+        print("\n" + "=" * 60)
+        print("KNOWLEDGE BASE DOCUMENTS USED:")
+        print("=" * 60)
+        for doc in report.knowledge_base_used:
+            print(f"  - {doc}")

@@ -96,6 +96,16 @@ OUTREACH_INSTRUCTIONS = [
     # Personalization
     "USE the conversation_starters from the research - they contain the hooks.",
     "The personalization_used field should describe WHICH data point made this personal.",
+
+    # Knowledge Base Citations (REQUIRED)
+    "KNOWLEDGE BASE CITATIONS - THIS IS MANDATORY:",
+    "  - You will receive brand guidelines from the Knowledge Base",
+    "  - Apply these guidelines to your tone, style, and approach",
+    "  - For EACH draft, fill in knowledge_sources with:",
+    "    - document_name: The exact name of the KB document you used",
+    "    - how_used: How it influenced your writing (e.g., 'Applied conversational tone from brand voice')",
+    "  - If no KB documents were provided, leave knowledge_sources empty",
+    "  - If KB documents ARE provided, you MUST cite at least one per draft",
 ]
 
 

@@ -145,6 +145,13 @@ class ResearchQuality(BaseModel):
 # =============================================================================
 
 
+class KnowledgeReference(BaseModel):
+    """Reference to a knowledge base document that informed the output."""
+
+    document_name: str = Field(..., description="Name of the KB document used")
+    how_used: str = Field(..., description="How this document influenced the output (e.g., 'Used brand voice guidelines')")
+
+
 class OutreachDraft(BaseModel):
     """A single outreach message draft."""
 
@@ -153,6 +160,10 @@ class OutreachDraft(BaseModel):
     body: str = Field(..., description="Message body")
     personalization_used: str = Field(
         ..., description="What data point made this personal (e.g., 'Their logistics services')"
+    )
+    knowledge_sources: list[KnowledgeReference] = Field(
+        default_factory=list,
+        description="KB documents that informed tone, style, or content of this message"
     )
 
 
@@ -211,6 +222,12 @@ class CompanyResearchReport(BaseModel):
     research_quality: Optional[ResearchQuality] = Field(
         default=None,
         description="Metrics about research thoroughness"
+    )
+
+    # Section 8: Knowledge Base Usage
+    knowledge_base_used: list[str] = Field(
+        default_factory=list,
+        description="Names of KB documents that informed the outreach (brand voice, case studies, etc.)"
     )
 
     # Metadata
