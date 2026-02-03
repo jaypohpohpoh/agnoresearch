@@ -130,14 +130,23 @@ URLs:
 
             # Check if it's a Pydantic model (has model_dump) or dict
             if hasattr(report, 'company_name'):
+                # Check for empty/failed results
+                if not report.company_name and not report.overview:
+                    st.warning("⚠️ Research returned limited data. This can happen when:")
+                    st.write("- Instagram/Facebook blocked the scraper (common)")
+                    st.write("- Website has anti-bot protection")
+                    st.write("- URLs were invalid or unreachable")
+                    st.write("\n**Tip:** Try with just the website URL first.")
+                    st.stop()
+
                 # It's a Pydantic model - access attributes directly
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Company", report.company_name)
+                    st.metric("Company", report.company_name or "Unknown")
                 with col2:
-                    st.metric("Industry", report.industry)
+                    st.metric("Industry", report.industry or "Unknown")
                 with col3:
-                    st.metric("Data Quality", getattr(report, 'data_quality', 'Medium'))
+                    st.metric("Data Quality", getattr(report, 'data_quality', 'Medium') or "Low")
 
                 st.subheader("📋 Overview")
                 st.write(report.overview)
