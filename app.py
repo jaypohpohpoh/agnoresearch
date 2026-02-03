@@ -126,56 +126,46 @@ URLs:
         st.divider()
 
         if response.content:
-            # Check for structured output
-            structured_output = getattr(response, "content", None)
+            report = response.content
 
-            # Try to display structured format if available
-            if hasattr(response, "content") and isinstance(response.content, dict):
-                report = response.content
-
+            # Check if it's a Pydantic model (has model_dump) or dict
+            if hasattr(report, 'company_name'):
+                # It's a Pydantic model - access attributes directly
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Company", report.get("company_name", "Unknown"))
+                    st.metric("Company", report.company_name)
                 with col2:
-                    st.metric("Industry", report.get("industry", "Unknown"))
+                    st.metric("Industry", report.industry)
                 with col3:
-                    st.metric("Data Quality", report.get("data_quality", "Medium"))
+                    st.metric("Data Quality", getattr(report, 'data_quality', 'Medium'))
 
                 st.subheader("📋 Overview")
-                st.write(report.get("overview", "No overview available"))
+                st.write(report.overview)
 
-                products = report.get("products_services", [])
-                if products:
+                if report.products_services:
                     st.subheader("🛍️ Products/Services")
-                    for item in products:
+                    for item in report.products_services:
                         st.write(f"- {item}")
 
-                opportunities = report.get("ai_opportunities", [])
-                if opportunities:
+                if report.ai_opportunities:
                     st.subheader("💡 AI Opportunities")
-                    for i, opp in enumerate(opportunities, 1):
-                        if isinstance(opp, dict):
-                            with st.expander(f"{i}. {opp.get('area', 'Area')}: {opp.get('opportunity', 'Opportunity')} ({opp.get('complexity', 'Medium')} complexity)"):
-                                st.write(opp.get("rationale", ""))
-                        else:
-                            st.write(f"{i}. {opp}")
+                    for i, opp in enumerate(report.ai_opportunities, 1):
+                        with st.expander(f"{i}. {opp.area}: {opp.opportunity} ({opp.complexity} complexity)"):
+                            st.write(opp.rationale)
 
-                hooks = report.get("outreach_hooks", [])
-                if hooks:
+                if report.outreach_hooks:
                     st.subheader("🎯 Outreach Hooks")
-                    for hook in hooks:
+                    for hook in report.outreach_hooks:
                         st.write(f"- {hook}")
 
-                notes = report.get("research_notes")
-                if notes:
+                if report.research_notes:
                     st.subheader("📝 Research Notes")
-                    st.info(notes)
+                    st.info(report.research_notes)
 
-                sources = report.get("sources", [])
-                if sources:
+                if report.sources:
                     st.subheader("🔗 Sources")
-                    for source in sources:
+                    for source in report.sources:
                         st.write(f"- {source}")
             else:
-                # Fallback to raw markdown display
+                # Fallback to raw display
                 st.markdown(str(response.content))

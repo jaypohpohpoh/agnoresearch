@@ -47,11 +47,8 @@ def create_research_agent(
         search_knowledge=True,
         description=SYSTEM_PROMPT,
         instructions=INSTRUCTIONS,
-        response_model=CompanyResearchReport,
-        db=SqliteDb(
-            table_name="sme_research",
-            db_file=str(db_path),
-        ),
+        output_schema=CompanyResearchReport,
+        db=SqliteDb(db_file=str(db_path)),
         markdown=True,
-        add_datetime_to_instructions=True,
+        add_datetime_to_context=True,
     )
