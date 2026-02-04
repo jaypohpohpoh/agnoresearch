@@ -210,7 +210,7 @@ Available documents: {', '.join(kb_doc_names)}
     if review_content:
         review_text = f"\n## Review Data\n{review_content[:500]}\n"
 
-    prompt = f"""Write FIRST-CONTACT outreach messages for this company.
+    prompt = f"""Write first-contact outreach for this company. You are JP.
 
 ## Company Research
 Company: {facts.company_name}
@@ -220,18 +220,17 @@ Products/Services: {', '.join(facts.products)}
 {review_text}
 {starters_text}
 {kb_text}
-## Recommended Hook Type: {hook_type}
+## Best Hook Type: {hook_type}
 
-## Task
-Write personalized outreach that starts a conversation (NOT a pitch):
+## What to Write
 
-1. WhatsApp (80-120 words): Observation → Question → Soft-connect
-2. Email (150-200 words with subject): Observation → Insight → Question → Soft-connect
+1. **WhatsApp** (40-60 words): Specific detail from research → genuine question → one-line context → "— JP"
+2. **Email** (75-125 words, subject 4-7 words): Trigger → sharp observation → question they can answer easily → soft context → "— JP"
 
-Use specific details from the research above. The recipient should NOT know what you're selling.
-Sign off with "— JP"
+Pick the most interesting detail from the research and build your hook around it.
+Write like a peer, not a stranger. Reference specific facts. No jargon.
 
-For each draft, you MUST fill in the knowledge_sources field citing which KB documents you used.
+For each draft, fill in knowledge_sources citing which KB documents shaped your tone/style.
 """
 
     # Use default model if not specified (Sonnet for outreach)
