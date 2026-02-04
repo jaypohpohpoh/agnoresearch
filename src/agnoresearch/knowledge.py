@@ -32,7 +32,7 @@ def create_knowledge_base(
         vector_db=LanceDb(
             table_name="knowledge_vectors",
             uri=str(db_path),
-            embedder=OllamaEmbedder(id=embedder_model),
+            embedder=OllamaEmbedder(id=embedder_model, dimensions=768),
         ),
     )
 
@@ -111,12 +111,12 @@ def search_knowledge(
 
         retrieved = []
         for i, result in enumerate(results):
-            # Extract metadata - structure depends on LanceDB result format
-            metadata = getattr(result, "metadata", {}) or {}
-            content = getattr(result, "content", "") or getattr(result, "text", "") or str(result)
-            name = metadata.get("filename", metadata.get("name", f"doc_{i}"))
-            dtype = metadata.get("doc_type", "general")
-            score = getattr(result, "score", getattr(result, "_distance", 0.0))
+            # Agno returns Document objects with .name, .content, .meta_data
+            content = getattr(result, "content", "") or str(result)
+            name = getattr(result, "name", None) or f"doc_{i}"
+            meta_data = getattr(result, "meta_data", {}) or {}
+            dtype = meta_data.get("doc_type", "general")
+            score = getattr(result, "reranking_score", 0.0) or 0.0
 
             # Filter by doc_type if specified
             if doc_type and dtype != doc_type:
